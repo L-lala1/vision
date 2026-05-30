@@ -1,0 +1,6 @@
+/decision_node:
+  ros__parameters:
+    total_delay: 0.03
+    fire_tolerance: 0.03
+    yaw_offset: 0.0
+    pitch_offset: 0.0

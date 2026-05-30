@@ -1,0 +1,4 @@
+/gimbal_node:
+  ros__parameters:
+    com_port: /dev/gimbal
+    baud_rate: 115200
