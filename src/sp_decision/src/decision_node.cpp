@@ -57,6 +57,11 @@ void DecisionNode::targetCallback(const auto_aim_interfaces::msg::Target::Shared
     return;
   }
 
+  // Compute actual system latency from message timestamp (dynamic, not fixed 30ms)
+  double measured_latency = (this->now() - msg->header.stamp).seconds();
+  // Use measured latency but clamp to [total_delay_, 0.15] to avoid extreme values
+  double effective_delay = std::max(total_delay_, std::min(measured_latency, 0.15));
+
   // 1. 弹道解算
   double d = std::hypot(msg->position.x, msg->position.y);
   double h = msg->position.z;
@@ -67,8 +72,8 @@ void DecisionNode::targetCallback(const auto_aim_interfaces::msg::Target::Shared
     return;
   }
 
-  // 2. 用弹道飞行时间重新预测，得到更准的未来位置
-  double future_t = traj.fly_time + total_delay_;
+  // 2. 用弹道飞行时间 + 实测延迟 重新预测未来位置
+  double future_t = traj.fly_time + effective_delay;
   double fx = msg->position.x + msg->velocity.x * future_t;
   double fy = msg->position.y + msg->velocity.y * future_t;
   double fz = msg->position.z + msg->velocity.z * future_t;
@@ -77,10 +82,23 @@ void DecisionNode::targetCallback(const auto_aim_interfaces::msg::Target::Shared
   tools::Trajectory traj2(bullet_speed_, std::hypot(fx, fy), fz);
   if (!traj2.unsolvable) {
     traj = traj2;
+    // Re-compute future_t with corrected fly_time for better accuracy
+    future_t = traj.fly_time + effective_delay;
+    fx = msg->position.x + msg->velocity.x * future_t;
+    fy = msg->position.y + msg->velocity.y * future_t;
+    fz = msg->position.z + msg->velocity.z * future_t;
   }
 
-  // 3. 计算瞄准角度
-  double aim_yaw = std::atan2(fy, fx) + yaw_offset_;
+  // 3. 旋转补偿 + 计算瞄准角度
+  // 弹丸飞行期间目标在转，小陀螺转速 >180°/s 时 0.3s 飞行可旋转 >54°
+  // 必须瞄准装甲板将转到的位置，而非当前位置
+  double future_yaw = msg->yaw + msg->v_yaw * future_t;
+  double r = msg->radius_1;
+  // 装甲板位置 = 中心 - r*(cos(yaw), sin(yaw))
+  double armor_x = fx - r * std::cos(future_yaw);
+  double armor_y = fy - r * std::sin(future_yaw);
+
+  double aim_yaw = std::atan2(armor_y, armor_x) + yaw_offset_;
   double aim_pitch = -(traj.pitch + pitch_offset_);
 
   // 4. 开火判断

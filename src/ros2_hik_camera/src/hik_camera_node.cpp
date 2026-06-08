@@ -104,8 +104,41 @@ public:
         }
 
         if (fail_conut_ > 5) {
-          RCLCPP_FATAL(this->get_logger(), "Camera failed!");
-          rclcpp::shutdown();
+          RCLCPP_ERROR(this->get_logger(), "Camera failed 5 times, attempting reconnect...");
+          fail_conut_ = 0;
+
+          // Close and reopen camera
+          MV_CC_StopGrabbing(camera_handle_);
+          MV_CC_CloseDevice(camera_handle_);
+          MV_CC_DestroyHandle(camera_handle_);
+
+          // Re-enumerate
+          MV_CC_DEVICE_INFO_LIST device_list;
+          int retry = 0;
+          while (rclcpp::ok() && retry < 10) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            nRet = MV_CC_EnumDevices(MV_USB_DEVICE, &device_list);
+            if (device_list.nDeviceNum > 0) break;
+            RCLCPP_WARN(this->get_logger(), "Camera reconnect retry %d/10", ++retry);
+          }
+
+          if (device_list.nDeviceNum > 0) {
+            MV_CC_CreateHandle(&camera_handle_, device_list.pDeviceInfo[0]);
+            MV_CC_OpenDevice(camera_handle_);
+            MV_CC_StartGrabbing(camera_handle_);
+
+            // Re-apply user-configured exposure and gain after reconnect
+            double exposure_time = this->get_parameter("exposure_time").as_double();
+            MV_CC_SetFloatValue(camera_handle_, "ExposureTime", exposure_time);
+            double gain = this->get_parameter("gain").as_double();
+            MV_CC_SetFloatValue(camera_handle_, "Gain", gain);
+            RCLCPP_INFO(
+              this->get_logger(),
+              "Camera reconnected! Exposure: %.0f us, Gain: %.1f", exposure_time, gain);
+          } else {
+            RCLCPP_FATAL(this->get_logger(), "Camera reconnect failed after 10 retries!");
+            rclcpp::shutdown();
+          }
         }
       }
     }};

@@ -93,7 +93,7 @@ void GimbalNode::read_thread()
   int error_count = 0;
 
   while (!quit_) {
-    if (error_count > 5000) {
+    if (error_count > 50) {
       error_count = 0;
       RCLCPP_WARN(this->get_logger(),"[GimbalNode] Too many errors, attempting to reconnect...");
       reconnect();

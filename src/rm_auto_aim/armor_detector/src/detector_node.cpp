@@ -77,6 +77,18 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions & options)
       debug_ ? createDebugPublishers() : destroyDebugPublishers();
     });
 
+  // Hand-eye calibration: camera_optical_frame -> gimbal_link
+  auto R_data = this->declare_parameter(
+    "hand_eye.R_camera2gimbal", std::vector<double>(9, 0.0));
+  auto t_data = this->declare_parameter(
+    "hand_eye.t_camera2gimbal", std::vector<double>(3, 0.0));
+  R_camera2gimbal_ = cv::Mat(3, 3, CV_64F, const_cast<double *>(R_data.data())).clone();
+  t_camera2gimbal_ = cv::Mat(3, 1, CV_64F, const_cast<double *>(t_data.data())).clone();
+  use_hand_eye_ = cv::norm(R_camera2gimbal_) > 1e-10;
+  RCLCPP_INFO(
+    this->get_logger(), "Hand-eye calibration %s",
+    use_hand_eye_ ? "enabled" : "disabled (all zeros, using URDF transforms)");
+
   cam_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
     "/camera_info", rclcpp::SensorDataQoS(),
     [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr camera_info) {
@@ -97,6 +109,11 @@ void ArmorDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstShared
 
   if (pnp_solver_ != nullptr) {
     armors_msg_.header = armor_marker_.header = text_marker_.header = img_msg->header;
+    if (use_hand_eye_) {
+      armors_msg_.header.frame_id = "gimbal_link";
+      armor_marker_.header.frame_id = "gimbal_link";
+      text_marker_.header.frame_id = "gimbal_link";
+    }
     armors_msg_.armors.clear();
     marker_array_.markers.clear();
     armor_marker_.id = 0;
@@ -112,19 +129,29 @@ void ArmorDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstShared
         armor_msg.number = armor.number;
 
         // Fill pose
-        armor_msg.pose.position.x = tvec.at<double>(0);
-        armor_msg.pose.position.y = tvec.at<double>(1);
-        armor_msg.pose.position.z = tvec.at<double>(2);
-        // rvec to 3x3 rotation matrix
         cv::Mat rotation_matrix;
         cv::Rodrigues(rvec, rotation_matrix);
-        // rotation matrix to quaternion
+        if (use_hand_eye_) {
+          // Transform position: p_gimbal = R * p_camera + t
+          cv::Mat xyz_in_gimbal = R_camera2gimbal_ * tvec + t_camera2gimbal_;
+          armor_msg.pose.position.x = xyz_in_gimbal.at<double>(0);
+          armor_msg.pose.position.y = xyz_in_gimbal.at<double>(1);
+          armor_msg.pose.position.z = xyz_in_gimbal.at<double>(2);
+          // Transform orientation: R_armor2gimbal = R_camera2gimbal * R_armor2camera
+          rotation_matrix = R_camera2gimbal_ * rotation_matrix;
+        } else {
+          armor_msg.pose.position.x = tvec.at<double>(0);
+          armor_msg.pose.position.y = tvec.at<double>(1);
+          armor_msg.pose.position.z = tvec.at<double>(2);
+        }
+        // rotation matrix to quaternion (uses final rotation_matrix from either branch)
         tf2::Matrix3x3 tf2_rotation_matrix(
           rotation_matrix.at<double>(0, 0), rotation_matrix.at<double>(0, 1),
           rotation_matrix.at<double>(0, 2), rotation_matrix.at<double>(1, 0),
           rotation_matrix.at<double>(1, 1), rotation_matrix.at<double>(1, 2),
           rotation_matrix.at<double>(2, 0), rotation_matrix.at<double>(2, 1),
           rotation_matrix.at<double>(2, 2));
+        // rotation matrix to quaternion
         tf2::Quaternion tf2_q;
         tf2_rotation_matrix.getRotation(tf2_q);
         armor_msg.pose.orientation = tf2::toMsg(tf2_q);

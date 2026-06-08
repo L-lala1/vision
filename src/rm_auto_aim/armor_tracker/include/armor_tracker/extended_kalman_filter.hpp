@@ -25,6 +25,9 @@ public:
   // Set the initial state
   void setState(const Eigen::VectorXd & x0);
 
+  // Reset the posterior covariance matrix (e.g., after state jump)
+  void setP(const Eigen::MatrixXd & P0);
+
   // Compute a predicted state
   Eigen::MatrixXd predict();
 

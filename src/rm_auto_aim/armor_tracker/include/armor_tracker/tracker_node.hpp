@@ -43,7 +43,7 @@ private:
 
   // The time when the last message was received
   rclcpp::Time last_time_;
-  double dt_;
+  double dt_ = 0.02;  // initialized to default 50Hz frame interval
 
   // Armor tracker
   double s2qxyz_, s2qyaw_, s2qr_;

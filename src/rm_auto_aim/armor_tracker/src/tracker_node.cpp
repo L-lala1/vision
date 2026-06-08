@@ -211,6 +211,12 @@ void ArmorTrackerNode::armorsCallback(const auto_aim_interfaces::msg::Armors::Sh
   auto_aim_interfaces::msg::TrackerInfo info_msg;
   auto_aim_interfaces::msg::Target target_msg;
   rclcpp::Time time = armors_msg->header.stamp;
+
+  // Compute dt at the top of every callback to avoid stale dt in EKF predict
+  if (last_time_.nanoseconds() > 0) {
+    dt_ = (time - last_time_).seconds();
+  }
+
   target_msg.header.stamp = time;
   target_msg.header.frame_id = target_frame_;
 
@@ -219,8 +225,7 @@ void ArmorTrackerNode::armorsCallback(const auto_aim_interfaces::msg::Armors::Sh
     tracker_->init(armors_msg);
     target_msg.tracking = false;
   } else {
-    dt_ = (time - last_time_).seconds();
-    tracker_->lost_thres = static_cast<int>(lost_time_thres_ / dt_);
+    tracker_->lost_thres = static_cast<int>(lost_time_thres_ / std::max(dt_, 1e-6));
     tracker_->update(armors_msg);
 
     // Publish Info

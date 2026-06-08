@@ -1,6 +1,7 @@
 /decision_node:
   ros__parameters:
+    # Minimum system delay in seconds (actual latency is measured dynamically)
     total_delay: 0.03
-    fire_tolerance: 0.03
-    yaw_offset: 0.0
-    pitch_offset: 0.0
+    fire_tolerance: 0.0349   # radians (~2 degrees)
+    yaw_offset: -0.0140
+    pitch_offset: -0.0175

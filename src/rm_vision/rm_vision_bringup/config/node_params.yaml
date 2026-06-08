@@ -1,24 +1,18 @@
 /camera_node:
   ros__parameters:
     camera_info_url: package://rm_vision_bringup/config/camera_info.yaml
-    exposure_time: 2500
-    gain: 8.0
+    exposure_time: 0.8
+    gain: 16.9
 
-/serial_driver:
-  ros__parameters:
-    timestamp_offset: 0.006
-    device_name: /dev/ttyACM0
-    baud_rate: 115200
-    flow_control: none
-    parity: none
-    stop_bits: "1"
+# NOTE: Serial communication is handled by sp_gimbal node (/dev/gimbal).
+# The legacy rm_serial_driver (/dev/ttyACM0) is NOT used in current launch.
 
 /armor_detector:
   ros__parameters:
     debug: true
 
-    detect_color: 0
-    binary_thres: 80
+    detect_color: 1
+    binary_thres: 150
 
     light.min_ratio: 0.1
     armor.min_light_ratio: 0.8
@@ -26,22 +20,30 @@
     classifier_threshold: 0.8
     ignore_classes: ["negative"]
 
+    hand_eye:
+      R_camera2gimbal: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      t_camera2gimbal: [0.0, 0.0, 0.0]
+
 /armor_tracker:
   ros__parameters:
     target_frame: odom
     max_armor_distance: 10.0
 
     ekf:
-      sigma2_q_xyz: 0.05
-      sigma2_q_yaw: 5.0
-      sigma2_q_r: 80.0
+      # Process noise: Q matrix diagonal scaling
+      # Higher = trust model less (faster response but noisier)
+      sigma2_q_xyz: 1.0     # position process noise (was 0.05 config / 20.0 code default)
+      sigma2_q_yaw: 20.0    # yaw process noise (raised for small-gyro tracking)
+      sigma2_q_r: 200.0     # radius process noise
 
-      r_xyz_factor: 4e-4
-      r_yaw: 5e-3
+      # Measurement noise: R matrix scaling
+      # Higher = trust measurement less (smoother but more lag)
+      r_xyz_factor: 0.01    # position measurement noise factor (was 0.0004)
+      r_yaw: 0.01           # yaw measurement noise (was 0.005)
 
     tracker:
       max_match_distance: 0.5
-      max_match_yaw_diff: 1.0
+      max_match_yaw_diff: 1.5   # raised from 1.0 for small-gyro tolerance
 
       tracking_thres: 5
-      lost_time_thres: 1.0
+      lost_time_thres: 0.5      # lowered from 1.0 for faster re-detection

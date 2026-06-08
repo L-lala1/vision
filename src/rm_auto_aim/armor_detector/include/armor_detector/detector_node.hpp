@@ -62,6 +62,11 @@ private:
   std::shared_ptr<sensor_msgs::msg::CameraInfo> cam_info_;
   std::unique_ptr<PnPSolver> pnp_solver_;
 
+  // Hand-eye calibration: camera_optical_frame -> gimbal_link
+  cv::Mat R_camera2gimbal_;
+  cv::Mat t_camera2gimbal_;
+  bool use_hand_eye_;
+
   // Image subscrpition
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
 

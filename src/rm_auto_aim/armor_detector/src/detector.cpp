@@ -44,8 +44,30 @@ cv::Mat Detector::preprocessImage(const cv::Mat & rgb_img)
   cv::Mat gray_img;
   cv::cvtColor(rgb_img, gray_img, cv::COLOR_RGB2GRAY);
 
+  // Apply CLAHE for lighting normalization (handles shadows and bright sun)
+  static auto clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
+  cv::Mat equalized;
+  clahe->apply(gray_img, equalized);
+
+  // Use Otsu auto-threshold for adaptive behavior
+  // Light bars are always bright white against dark background
   cv::Mat binary_img;
-  cv::threshold(gray_img, binary_img, binary_thres, 255, cv::THRESH_BINARY);
+  if (binary_thres > 0) {
+    // Blend: use the stricter of Otsu and fixed threshold
+    cv::Mat otsu_binary, fixed_binary;
+    cv::threshold(equalized, otsu_binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    cv::threshold(equalized, fixed_binary, binary_thres, 255, cv::THRESH_BINARY);
+    // Prefer fewer white pixels (less noise) but not too few (< 0.5%)
+    double otsu_ratio = cv::countNonZero(otsu_binary) / (double)(equalized.rows * equalized.cols);
+    double fixed_ratio = cv::countNonZero(fixed_binary) / (double)(equalized.rows * equalized.cols);
+    if (otsu_ratio > 0.005 && (fixed_ratio > otsu_ratio || fixed_ratio < 0.003)) {
+      binary_img = otsu_binary;
+    } else {
+      binary_img = fixed_binary;
+    }
+  } else {
+    cv::threshold(equalized, binary_img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+  }
 
   return binary_img;
 }

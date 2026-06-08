@@ -207,6 +207,8 @@ void Tracker::handleArmorJump(const Armor & current_armor)
     target_state(3) = 0;                   // vyc
     target_state(4) = p.z;                 // za
     target_state(5) = 0;                   // vza
+    // Reset covariance matrix to prevent stale uncertainty from old state
+    ekf.setP(Eigen::MatrixXd::Identity(9, 9));
     RCLCPP_ERROR(rclcpp::get_logger("armor_tracker"), "Reset State!");
   }
 

@@ -1,3 +1,12 @@
+# ============================================================
+# CANONICAL camera_info.yaml for rm_vision
+# This is the ONLY active camera calibration file.
+# All camera drivers reference this via:
+#   camera_info_url: package://rm_vision_bringup/config/camera_info.yaml
+#
+# ⚠️ REPLACE these values with your ACTUAL calibrated results
+#    from calibrate_camera BEFORE deploying to the real robot!
+# ============================================================
 image_width: 1440
 image_height: 1080
 camera_name: narrow_stereo
